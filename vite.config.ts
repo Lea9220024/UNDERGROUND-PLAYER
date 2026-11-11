@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     base,
     plugins: [react(), VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon.svg'],
+      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         id: base,
         name: 'UNDERGROUND Offline Player',
@@ -25,14 +25,11 @@ export default defineConfig(({ mode }) => {
         scope: base,
         categories: ['music', 'entertainment'],
         icons: [
-          { src: base + 'icons/icon.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-          { src: base + 'icons/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+          { src: base + 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: base + 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallback: 'index.html'
-      }
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'], navigateFallback: 'index.html' }
     })]
   };
 });

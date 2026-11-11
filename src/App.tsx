@@ -228,7 +228,7 @@ export default function App() {
         title: current.title,
         artist: current.artist || 'UNDERGROUND OFFLINE PLAYER',
         album: current.album || 'Biblioteca local',
-        artwork: [{ src: '/UNDERGROUND-PLAYER/icons/icon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+        artwork: [{ src: '/UNDERGROUND-PLAYER/icons/icon-192.png', sizes: '192x192', type: 'image/svg+xml' }]
       });
     } else navigator.mediaSession.metadata = null;
     const actions: Array<[MediaSessionAction, MediaSessionActionHandler | null]> = [
