@@ -128,7 +128,7 @@ export default function App() {
     };
     draw();
     return () => cancelAnimationFrame(frame);
-  }, [showVisualizer]);
+  }, [showVisualizer, playing]);
   useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); audioContextRef.current?.close(); }, []);
 
   const setupAudioGraph = useCallback(async () => {
@@ -163,7 +163,7 @@ export default function App() {
       const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
       const parts = relative.split('/').filter(Boolean);
       const title = file.name.replace(/\.[^.]+$/, '');
-      return { id: `${file.name}-${file.size}-${file.lastModified}`, name: file.name, title, artist: 'Artista desconocido', album: 'Sin álbum', folder: parts.length > 1 ? parts.slice(0, -1).join('/') : 'Música importada', type: file.name.split('.').pop()?.toUpperCase() || 'AUDIO', blob: file, favorite: false, addedAt: Date.now() };
+      return { id: `${relative || file.name}-${file.size}-${file.lastModified}`, name: file.name, title, artist: 'Artista desconocido', album: 'Sin álbum', folder: parts.length > 1 ? parts.slice(0, -1).join('/') : 'Música importada', type: file.name.split('.').pop()?.toUpperCase() || 'AUDIO', blob: file, favorite: false, addedAt: Date.now() };
     });
     if (!items.length) { setMessage('No se encontraron archivos de audio compatibles.'); return; }
     await putTracks(items);
