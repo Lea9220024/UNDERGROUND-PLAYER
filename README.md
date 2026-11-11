@@ -1,38 +1,39 @@
-# UNDERGROUND — Offline Player
+# UNDERGROUND OFFLINE PLAYER
 
-Reproductor musical PWA local-first. No tiene streaming, cuentas, publicidad ni backend. Los archivos importados permanecen en el almacenamiento del navegador mediante IndexedDB.
-
-## Primera versión funcional
-
-- Importación de archivos de audio y selección de carpetas (según el navegador).
-- Biblioteca persistente en IndexedDB, búsqueda, favoritos y filtro por carpetas.
-- Reproducción, pausa, anterior/siguiente, aleatorio, repetir, volumen y posición.
-- Ecualizador DSP de cinco bandas mediante Web Audio API.
-- Visualizador de espectro mediante AnalyserNode y Canvas.
-- Asociación de letras sincronizadas LRC por nombre de archivo.
-- Edición local de título, artista y álbum. No sobrescribe los tags del archivo original.
-- PWA instalable con service worker.
+Reproductor musical PWA local, sin streaming, cuentas ni backend.
 
 ## Desarrollo
-
-Requisitos: Node.js 20 o superior.
-
 ```bash
 npm install
 npm run dev
+```
+
+## Build
+```bash
 npm run build
 npm run preview
 ```
 
-## Limitaciones conocidas
+## Publicación e instalación Android
 
-- La selección de carpetas depende del soporte del navegador; en Android puede ser necesario seleccionar archivos desde el gestor de archivos.
-- La reproducción de MP3, AAC, WAV, FLAC, OGG y otros formatos depende de los codecs del navegador/dispositivo.
-- La reproducción en segundo plano y los controles de pantalla bloqueada dependen de Android y del navegador. No equivale todavía a una app nativa.
-- Los metadatos editados se guardan en la biblioteca local, no dentro del archivo original.
-- Las letras LRC deben importarse como archivos `.lrc` con el mismo nombre base que la pista.
-- El almacenamiento del navegador puede ser eliminado por el sistema si el usuario borra los datos del sitio; conviene implementar exportación/backup en una siguiente versión.
+El workflow `.github/workflows/pages.yml` publica automáticamente la PWA en GitHub Pages al actualizar `main`.
 
-## Privacidad
+1. En GitHub, abrir **Settings → Pages** y seleccionar **GitHub Actions** como fuente de publicación.
+2. Esperar que termine correctamente el workflow **Deploy PWA to GitHub Pages**.
+3. Abrir en Chrome Android: https://lea9220024.github.io/UNDERGROUND-PLAYER/
+4. Abrir el menú ⋮ y elegir **Instalar aplicación** o tocar **Instalar app** dentro del reproductor.
+5. Confirmar la instalación. La app aparecerá en el launcher de Android.
 
-El proyecto no implementa backend ni sube archivos. La música se guarda en IndexedDB del dispositivo donde se importa.
+La primera apertura requiere conexión para descargar la aplicación. Después, la interfaz se puede abrir sin conexión. La música importada se almacena localmente en IndexedDB y no se sube a ningún servidor.
+
+## Android
+
+- Diseño táctil adaptable y respeto por las áreas seguras del sistema.
+- Media Session para mostrar título, artista y controles en la pantalla bloqueada y panel multimedia cuando Chrome/Android lo permiten.
+- La reproducción de fondo depende de las políticas de batería, navegador y sistema operativo.
+- Los archivos permanecen en el almacenamiento del navegador; borrar los datos de Chrome puede eliminarlos.
+- La compatibilidad de formatos depende de los codecs disponibles en Android/Chrome.
+
+## Limitaciones actuales
+
+Los metadatos editados se guardan en la biblioteca de la app, no se escriben todavía dentro del archivo original. La PWA no equivale a un servicio nativo Android para control absoluto de reproducción en segundo plano.

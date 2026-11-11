@@ -4,6 +4,7 @@ import { AudioLines, Disc3, Folder, Heart, Music2, Pause, Play, Plus, Search, Sk
 type Track = { id: string; name: string; title: string; artist: string; album: string; folder: string; type: string; blob: Blob; favorite: boolean; addedAt: number; lyrics?: string };
 type Section = 'all' | 'favorites' | 'folders';
 const DB = 'underground-player-db';
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
 const STORE = 'tracks';
 const audioTypes = /\.(mp3|m4a|aac|wav|flac|ogg|opus|webm)$/i;
 const fmt = (n: number) => `${Math.floor((n || 0) / 60)}:${String(Math.floor((n || 0) % 60)).padStart(2, '0')}`;
@@ -53,6 +54,8 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.85);
   const [message, setMessage] = useState('Importá música para crear tu biblioteca local');
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
   const [showEQ, setShowEQ] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
@@ -83,6 +86,29 @@ export default function App() {
 
   useEffect(() => { getTracks().then(items => { setTracks(items); setMessage(`${items.length} pista(s) recuperadas del almacenamiento local`); }).catch(() => setMessage('No se pudo acceder al almacenamiento local de este navegador.')); }, []);
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsInstalled(standalone);
+    const onInstallPrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
+    const onInstalled = () => { setIsInstalled(true); setInstallPrompt(null); setMessage('UNDERGROUND quedó instalada en este dispositivo.'); };
+    window.addEventListener('beforeinstallprompt', onInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+  const installApp = async () => {
+    if (!installPrompt) {
+      setMessage('Para instalar: abrí el menú ⋮ de Chrome y elegí “Instalar aplicación” o “Agregar a pantalla principal”.');
+      return;
+    }
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setMessage(choice.outcome === 'accepted' ? 'Instalación aceptada. Terminá el proceso desde Android.' : 'Instalación cancelada. Podés instalarla desde el menú de Chrome.');
+  };
   useEffect(() => {
     if (!audioRef.current || !current) return;
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -195,6 +221,35 @@ export default function App() {
     const index = tracks.findIndex(track => track.id === activeId);
     await playTrack(tracks[(index + direction + tracks.length) % tracks.length].id);
   };
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (current) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: current.title,
+        artist: current.artist || 'UNDERGROUND OFFLINE PLAYER',
+        album: current.album || 'Biblioteca local',
+        artwork: [{ src: '/UNDERGROUND-PLAYER/icons/icon.svg', sizes: '192x192', type: 'image/svg+xml' }]
+      });
+    } else navigator.mediaSession.metadata = null;
+    const actions: Array<[MediaSessionAction, MediaSessionActionHandler | null]> = [
+      ['play', () => { void togglePlay(); }],
+      ['pause', () => setPlaying(false)],
+      ['previoustrack', () => { void nextTrack(-1); }],
+      ['nexttrack', () => { void nextTrack(1); }],
+      ['seekto', (details) => { if (details.seekTime != null) seek(details.seekTime); }]
+    ];
+    actions.forEach(([action, handler]) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* Acción no soportada */ }
+    });
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    return () => actions.forEach(([action]) => {
+      try { navigator.mediaSession.setActionHandler(action, null); } catch { /* Acción no soportada */ }
+    });
+  }, [current?.id, current?.title, current?.artist, current?.album, playing, tracks, activeId]);
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !duration || !Number.isFinite(duration)) return;
+    try { navigator.mediaSession.setPositionState({ duration, playbackRate: 1, position: Math.min(progress, duration) }); } catch { /* No disponible */ }
+  }, [progress, duration]);
   const toggleFavorite = async (track: Track) => {
     const updated = { ...track, favorite: !track.favorite }; await putTrack(updated);
     setTracks(previous => previous.map(item => item.id === track.id ? updated : item));
@@ -216,7 +271,7 @@ export default function App() {
     <main className="main">
       <header className="topbar">
         <div><div className="eyebrow">PERSONAL AUDIO SYSTEM / 001</div><h1>UNDERGROUND<span>.</span></h1></div>
-        <div className="top-actions"><span className="offline"><i/> OFFLINE MODE</span><button className="icon-btn" onClick={() => fileRef.current?.click()}><Plus size={17}/><span>IMPORTAR</span></button></div>
+        <div className="top-actions"><span className="offline"><i/> OFFLINE MODE</span>{!isInstalled && <button className="install-btn" onClick={() => void installApp()}><Plus size={15}/><span>{installPrompt ? 'INSTALAR APP' : 'CÓMO INSTALAR'}</span></button>}<button className="icon-btn" onClick={() => fileRef.current?.click()}><Plus size={17}/><span>IMPORTAR</span></button></div>
       </header>
       <section className="hero">
         <div className="hero-copy"><div className="eyebrow red">YOUR MUSIC. YOUR RULES.</div><h2>NO SIGNAL.<br/><em>NO LIMITS.</em></h2><p>Tu biblioteca. Tu dispositivo. Sin streaming. Sin cuentas. Sin anuncios.</p></div>
@@ -248,7 +303,7 @@ export default function App() {
     {showLyrics && <section className="floating-panel lyrics-panel"><div className="panel-head"><strong>LETRAS / LRC</strong><button onClick={() => setShowLyrics(false)}><X size={16}/></button></div><div className="lyrics-body">{currentLyrics.length ? <>{currentLyrics.map((line, index) => <p key={`${line.seconds}-${index}`} className={activeLyric === line ? 'lyric-active' : ''}>{line.text}</p>)}<button className="reset-btn" onClick={() => lrcRef.current?.click()}>CAMBIAR ARCHIVO LRC</button></> : <><p className="muted">No hay letras sincronizadas para esta pista.</p><button className="reset-btn" onClick={() => lrcRef.current?.click()}>IMPORTAR ARCHIVO .LRC</button></>}</div></section>}
     {showVisualizer && <section className="floating-panel visualizer-panel"><div className="panel-head"><strong>VISUALIZER / AUDIO SPECTRUM</strong><button onClick={() => setShowVisualizer(false)}><X size={16}/></button></div><canvas ref={canvasRef}/></section>}
     {editing && <div className="modal-backdrop"><section className="edit-modal"><div className="panel-head"><strong>EDITAR METADATOS</strong><button onClick={() => setEditing(false)}><X size={16}/></button></div><label>TÍTULO<input value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })}/></label><label>ARTISTA<input value={draft.artist} onChange={event => setDraft({ ...draft, artist: event.target.value })}/></label><label>ÁLBUM<input value={draft.album} onChange={event => setDraft({ ...draft, album: event.target.value })}/></label><p className="muted">Los cambios se guardan en la biblioteca de UNDERGROUND; no modifican el archivo original.</p><button className="red-btn" onClick={() => void saveEdit()}>GUARDAR CAMBIOS</button></section></div>}
-    <audio ref={audioRef} onTimeUpdate={updateTime} onLoadedMetadata={updateTime} onEnded={() => { if (repeat && audioRef.current) { audioRef.current.currentTime = 0; void audioRef.current.play(); } else void nextTrack(1); }} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
+    <audio ref={audioRef} preload="metadata" playsInline onTimeUpdate={updateTime} onLoadedMetadata={updateTime} onEnded={() => { if (repeat && audioRef.current) { audioRef.current.currentTime = 0; void audioRef.current.play(); } else void nextTrack(1); }} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
     <input ref={fileRef} hidden type="file" accept="audio/*,.flac,.opus" multiple onChange={onFiles}/>
     <input ref={folderRef} hidden type="file" accept="audio/*,.flac,.opus" multiple {...({ webkitdirectory: '', directory: '' } as object)} onChange={onFiles}/>
     <input ref={lrcRef} hidden type="file" accept=".lrc,text/plain" multiple onChange={event => { void importLyrics(event.target.files); event.target.value = ''; }}/>
