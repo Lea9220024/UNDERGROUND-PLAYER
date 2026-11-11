@@ -373,3 +373,7 @@ audio { display: none; }
   body { user-select: none; -webkit-user-select: none; }
   .track-name, .search input, .edit-modal input { user-select: text; -webkit-user-select: text; }
 }
+
+@media (max-width: 680px) {
+  .hero { display: none; }
+}
