@@ -1,9 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-  const base = mode === 'development' ? '/' : '/UNDERGROUND-PLAYER/';
+  const env = loadEnv(mode, process.cwd(), '');
+  const base = env.VITE_BASE_PATH || (mode === 'development' ? '/' : '/UNDERGROUND-PLAYER/');
+
   return {
     base,
     plugins: [react(), VitePWA({
