@@ -43,6 +43,46 @@ function parseLrc(raw: string) {
   }).filter((x): x is { seconds: number; text: string } => !!x).sort((a, b) => a.seconds - b.seconds);
 }
 
+
+function encodeSynchsafe(size: number): Uint8Array {
+  return new Uint8Array([(size >> 21) & 0x7f, (size >> 14) & 0x7f, (size >> 7) & 0x7f, size & 0x7f]);
+}
+function createTextFrame(id: string, value: string): Uint8Array {
+  const text = new TextEncoder().encode(value);
+  const frame = new Uint8Array(10 + text.length + 1);
+  frame.set(new TextEncoder().encode(id), 0);
+  frame.set(encodeSynchsafe(text.length + 1), 4);
+  frame[10] = 3; // UTF-8, ID3v2.4
+  frame.set(text, 11);
+  return frame;
+}
+async function createMp3WithId3(blob: Blob, metadata: { title: string; artist: string; album: string }): Promise<Blob> {
+  const original = new Uint8Array(await blob.arrayBuffer());
+  let audioStart = 0;
+  let audioEnd = original.length;
+  if (original.length >= 10 && original[0] === 0x49 && original[1] === 0x44 && original[2] === 0x33) {
+    const tagSize = ((original[6] & 0x7f) << 21) | ((original[7] & 0x7f) << 14) | ((original[8] & 0x7f) << 7) | (original[9] & 0x7f);
+    audioStart = Math.min(original.length, 10 + tagSize);
+  }
+  if (audioEnd - audioStart >= 128 && original[audioEnd - 128] === 0x54 && original[audioEnd - 127] === 0x41 && original[audioEnd - 126] === 0x47) {
+    audioEnd -= 128; // Remove stale ID3v1 values from the exported copy.
+  }
+  const frames = [createTextFrame('TIT2', metadata.title), createTextFrame('TPE1', metadata.artist), createTextFrame('TALB', metadata.album)];
+  const frameSize = frames.reduce((total, frame) => total + frame.length, 0);
+  const tag = new Uint8Array(10 + frameSize);
+  tag.set([0x49, 0x44, 0x33, 0x04, 0x00, 0x00], 0); // ID3v2.4
+  tag.set(encodeSynchsafe(frameSize), 6);
+  let offset = 10;
+  frames.forEach(frame => { tag.set(frame, offset); offset += frame.length; });
+  const output = new Uint8Array(tag.length + audioEnd - audioStart);
+  output.set(tag, 0);
+  output.set(original.subarray(audioStart, audioEnd), tag.length);
+  return new Blob([output.buffer as ArrayBuffer], { type: 'audio/mpeg' });
+}
+function safeDownloadName(value: string): string {
+  return value.replace(/[\\/:*?"<>|]/g, '-').replace(/[. ]+$/, '').trim() || 'underground-track';
+}
+
 export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -258,6 +298,28 @@ export default function App() {
   const seek = (value: number) => { if (audioRef.current) { audioRef.current.currentTime = value; setProgress(value); } };
   const startEdit = () => { if (!current) return; setDraft({ title: current.title, artist: current.artist, album: current.album }); setEditing(true); };
   const saveEdit = async () => { if (!current) return; const updated = { ...current, ...draft }; await putTrack(updated); setTracks(previous => previous.map(track => track.id === current.id ? updated : track)); setEditing(false); setMessage('Metadatos actualizados en la biblioteca local.'); };
+  const exportMp3Copy = async () => {
+    if (!current) return;
+    if (!/\\.mp3$/i.test(current.name)) { setMessage('La exportación de etiquetas ID3 está disponible únicamente para archivos MP3.'); return; }
+    try {
+      const updated = { ...current, ...draft };
+      await putTrack(updated);
+      setTracks(previous => previous.map(track => track.id === current.id ? updated : track));
+      const exported = await createMp3WithId3(current.blob, updated);
+      const url = URL.createObjectURL(exported);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeDownloadName(current.name.replace(/\\.mp3$/i, ''))} - UNDERGROUND.mp3`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setEditing(false);
+      setMessage('Copia MP3 exportada con etiquetas ID3. El archivo original permanece intacto.');
+    } catch {
+      setMessage('No se pudo exportar la copia MP3. El archivo original no fue modificado.');
+    }
+  };
   const onFiles = (event: ChangeEvent<HTMLInputElement>) => { void importFiles(event.target.files); event.target.value = ''; };
 
   return <div className="shell">
@@ -302,7 +364,7 @@ export default function App() {
     {showEQ && <section className="floating-panel eq-panel"><div className="panel-head"><strong>ECUALIZADOR / 5 BANDAS</strong><button onClick={() => setShowEQ(false)}><X size={16}/></button></div><div className="eq-sliders">{['60 Hz', '250 Hz', '1 kHz', '4 kHz', '12 kHz'].map((label, index) => <label key={label}><input aria-label={label} type="range" min="-12" max="12" step="1" value={eq[index]} onChange={event => setEq(previous => previous.map((value, i) => i === index ? Number(event.target.value) : value))}/><b>{eq[index] > 0 ? '+' : ''}{eq[index]} dB</b><span>{label}</span></label>)}</div><button className="reset-btn" onClick={() => setEq([0, 0, 0, 0, 0])}>RESTABLECER</button></section>}
     {showLyrics && <section className="floating-panel lyrics-panel"><div className="panel-head"><strong>LETRAS / LRC</strong><button onClick={() => setShowLyrics(false)}><X size={16}/></button></div><div className="lyrics-body">{currentLyrics.length ? <>{currentLyrics.map((line, index) => <p key={`${line.seconds}-${index}`} className={activeLyric === line ? 'lyric-active' : ''}>{line.text}</p>)}<button className="reset-btn" onClick={() => lrcRef.current?.click()}>CAMBIAR ARCHIVO LRC</button></> : <><p className="muted">No hay letras sincronizadas para esta pista.</p><button className="reset-btn" onClick={() => lrcRef.current?.click()}>IMPORTAR ARCHIVO .LRC</button></>}</div></section>}
     {showVisualizer && <section className="floating-panel visualizer-panel"><div className="panel-head"><strong>VISUALIZER / AUDIO SPECTRUM</strong><button onClick={() => setShowVisualizer(false)}><X size={16}/></button></div><canvas ref={canvasRef}/></section>}
-    {editing && <div className="modal-backdrop"><section className="edit-modal"><div className="panel-head"><strong>EDITAR METADATOS</strong><button onClick={() => setEditing(false)}><X size={16}/></button></div><label>TÍTULO<input value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })}/></label><label>ARTISTA<input value={draft.artist} onChange={event => setDraft({ ...draft, artist: event.target.value })}/></label><label>ÁLBUM<input value={draft.album} onChange={event => setDraft({ ...draft, album: event.target.value })}/></label><p className="muted">Los cambios se guardan en la biblioteca de UNDERGROUND; no modifican el archivo original.</p><button className="red-btn" onClick={() => void saveEdit()}>GUARDAR CAMBIOS</button></section></div>}
+    {editing && <div className="modal-backdrop"><section className="edit-modal"><div className="panel-head"><strong>EDITAR METADATOS</strong><button onClick={() => setEditing(false)}><X size={16}/></button></div><label>TÍTULO<input value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })}/></label><label>ARTISTA<input value={draft.artist} onChange={event => setDraft({ ...draft, artist: event.target.value })}/></label><label>ÁLBUM<input value={draft.album} onChange={event => setDraft({ ...draft, album: event.target.value })}/></label><p className="muted">Guardar cambios actualiza la biblioteca local. Exportar crea una copia MP3 con etiquetas ID3; nunca sobrescribe el archivo original.</p><div className="edit-actions"><button className="outline-btn" disabled={!current?.name.toLowerCase().endsWith('.mp3')} onClick={() => void exportMp3Copy()}>EXPORTAR COPIA MP3</button><button className="red-btn" onClick={() => void saveEdit()}>GUARDAR EN BIBLIOTECA</button></div>{current && !current.name.toLowerCase().endsWith('.mp3') && <p className="muted">La exportación ID3 solo está disponible para archivos MP3.</p>}</section></div>}
     <audio ref={audioRef} preload="metadata" playsInline onTimeUpdate={updateTime} onLoadedMetadata={updateTime} onEnded={() => { if (repeat && audioRef.current) { audioRef.current.currentTime = 0; void audioRef.current.play(); } else void nextTrack(1); }} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
     <input ref={fileRef} hidden type="file" accept="audio/*,.flac,.opus" multiple onChange={onFiles}/>
     <input ref={folderRef} hidden type="file" accept="audio/*,.flac,.opus" multiple {...({ webkitdirectory: '', directory: '' } as object)} onChange={onFiles}/>
