@@ -259,6 +259,9 @@ input[type=range] { min-height: 22px; accent-color: var(--ember); }
 }
 .edit-modal input:focus { border-color: var(--ember); }
 .edit-modal .red-btn { align-self: flex-start; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.edit-actions .outline-btn, .edit-actions .red-btn { min-height: 38px; }
+.edit-actions button:disabled { opacity: .35; cursor: not-allowed; }
 .edit-modal .muted { line-height: 1.5; }
 audio { display: none; }
 
