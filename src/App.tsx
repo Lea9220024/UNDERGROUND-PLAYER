@@ -300,7 +300,7 @@ export default function App() {
   const saveEdit = async () => { if (!current) return; const updated = { ...current, ...draft }; await putTrack(updated); setTracks(previous => previous.map(track => track.id === current.id ? updated : track)); setEditing(false); setMessage('Metadatos actualizados en la biblioteca local.'); };
   const exportMp3Copy = async () => {
     if (!current) return;
-    if (!/\\.mp3$/i.test(current.name)) { setMessage('La exportación de etiquetas ID3 está disponible únicamente para archivos MP3.'); return; }
+    if (!/\.mp3$/i.test(current.name)) { setMessage('La exportación de etiquetas ID3 está disponible únicamente para archivos MP3.'); return; }
     try {
       const updated = { ...current, ...draft };
       await putTrack(updated);
@@ -309,7 +309,7 @@ export default function App() {
       const url = URL.createObjectURL(exported);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${safeDownloadName(current.name.replace(/\\.mp3$/i, ''))} - UNDERGROUND.mp3`;
+      link.download = `${safeDownloadName(current.name.replace(/\.mp3$/i, ''))} - UNDERGROUND.mp3`;
       document.body.appendChild(link);
       link.click();
       link.remove();
