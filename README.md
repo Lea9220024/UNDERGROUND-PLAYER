@@ -36,4 +36,4 @@ La primera apertura requiere conexión para descargar la aplicación. Después, 
 
 ## Limitaciones actuales
 
-Los metadatos editados se guardan en la biblioteca de la app, no se escriben todavía dentro del archivo original. La PWA no equivale a un servicio nativo Android para control absoluto de reproducción en segundo plano.
+Los metadatos editados se guardan en la biblioteca de la app y no sobrescriben el archivo original. Para archivos MP3, el editor permite exportar una copia con etiquetas ID3v2.4 (título, artista y álbum); los demás formatos mantienen los cambios únicamente en la biblioteca. La PWA no equivale a un servicio nativo Android para control absoluto de reproducción en segundo plano.
